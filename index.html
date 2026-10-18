@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7e9ec"><title>百人一首 暗記の庭</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="season-wash" aria-hidden="true"><span class="season-symbol" id="season-symbol">❀</span></div>
+<main class="app">
+<section id="home-screen" class="screen home-screen">
+  <div class="home-mark" aria-hidden="true">百</div>
+  <p class="eyebrow" id="season-label">季節と楽しむ、百人一首</p>
+  <h1>百人一首<br><span>暗記の庭</span></h1>
+  <p class="subtitle" id="season-message">一首ずつ、ゆっくりと。</p>
+  <div class="season-art" id="season-art" aria-hidden="true"><span>🌸</span><span>🌸</span><span>🌸</span></div>
+  <div class="home-card">
+    <p>小倉百人一首・全100首</p>
+    <p class="home-description">上の句を読んで、下の句を思い出そう。</p>
+    <button id="go-select" class="primary large-button">遊び方を選ぶ <span aria-hidden="true">→</span></button>
+  </div>
+  <p class="season-foot" id="season-foot">春のしつらえ</p>
+</section>
+
+<section id="select-screen" class="screen hidden">
+  <header class="page-heading"><button class="back-link" data-screen="home-screen">← ホーム</button><p class="eyebrow">PLAY MENU</p><h1>遊び方を選ぶ</h1><p class="subtitle">出題形式と札の種類を決めてください。</p></header>
+  <section class="settings panel">
+    <div class="field"><label for="mode">出題形式</label><select id="mode"><option value="mixed">おまかせ（混合）</option><option value="choice">4択問題</option><option value="typing">文字入力</option><option value="cards">札選択</option></select></div>
+    <div class="field"><label for="color">札の種類</label><select id="color"><option value="all">全て（100首）</option><option value="青">青札</option><option value="桃">桃札</option><option value="黄">黄札</option><option value="緑">緑札</option><option value="橙">橙札</option></select></div>
+    <div class="field"><label for="order">出題順</label><select id="order"><option value="random">シャッフル</option><option value="number">歌番号順</option></select></div>
+  </section>
+  <div class="selection-summary panel"><div class="mini-seal">歌</div><div><strong>今日の一首を見つけよう</strong><p>間違えても大丈夫。正解はいつでも確認できます。</p></div></div>
+  <button id="start" class="primary large-button full-button">この設定で始める <span aria-hidden="true">→</span></button>
+  <section class="help panel"><h2>遊び方</h2><ul><li><b>4択問題：</b>下の句を4つから選びます。</li><li><b>文字入力：</b>下の句を入力して答え合わせ。</li><li><b>札選択：</b>下の句の札を選びます。</li><li><b>おまかせ：</b>問題ごとに形式が切り替わります。</li></ul><p class="note">五色の札：青・桃・黄・緑・橙。各色20首ずつ。</p></section>
+</section>
+
+<section id="game-screen" class="screen hidden">
+  <header class="game-heading"><button class="back-link" data-screen="select-screen">← 設定に戻る</button><p class="eyebrow">YOUR PRACTICE</p><h1>今日の百人一首</h1></header>
+  <section class="stats"><div class="stat"><span>問題</span><strong id="progress">0 / 0</strong></div><div class="stat"><span>正解</span><strong id="correct">0</strong></div><div class="stat"><span>正答率</span><strong id="rate">—</strong></div></section>
+  <section class="quiz panel"><div class="quiz-top"><span id="badge" class="badge">第1首</span><span id="mode-badge" class="mode-badge">4択問題</span></div><div class="verse-label">上の句</div><div id="kami" class="kami">設定を選んでスタートしてください</div><div id="author" class="author"></div><div id="answer-area" class="answer-area"></div><div id="feedback" class="feedback" aria-live="polite"></div><div class="actions"><button id="check" class="primary" disabled>答え合わせ</button><button id="reveal" class="secondary" disabled>正解を見る</button><button id="next" class="secondary" disabled>次の問題 →</button></div></section>
+  <button class="secondary full-button return-home" data-screen="home-screen">ホームへ戻る</button>
+</section>
+<footer>百人一首を、少しずつ確実に。</footer>
+</main><script src="script.js"></script></body></html>
