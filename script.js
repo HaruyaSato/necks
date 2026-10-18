@@ -1,3 +1,4 @@
+
 const POEMS = [
   {
     "n": 1,
@@ -700,6 +701,7 @@ const POEMS = [
     "color": "青"
   }
 ];
+
 // 五色百人一首の色分け（各20首）
 const COLOR_NUMBERS = {
   "青": [1,2,6,10,17,21,25,34,36,39,47,52,57,67,70,73,78,83,87,97],
@@ -708,42 +710,341 @@ const COLOR_NUMBERS = {
   "緑": [4,7,11,18,23,28,32,37,44,49,54,60,63,69,72,77,82,88,93,96],
   "橙": [9,13,15,19,26,31,33,40,45,50,56,61,65,75,80,84,89,91,94,100]
 };
-for (const [color, numbers] of Object.entries(COLOR_NUMBERS)) {
-  for (const poem of POEMS) if (numbers.includes(poem.n)) poem.color = color;
-}
-const COLORS = {"青":"#1685D1","桃":"#E979A5","黄":"#F2CF38","緑":"#65A765","橙":"#ED8733"};
-const $ = id => document.getElementById(id);
-let deck=[], index=0, score=0, answered=0, selected=null, currentMode='choice', locked=false;
-const normalize = s => s.normalize('NFKC').replace(/[\s　、。・「」『』]/g,'').replace(/[ぁ-ゖ]/g,c=>String.fromCharCode(c.charCodeAt(0)+0x60)).replace(/[ゐゑ]/g,'い');
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function start(){const c=$('color').value;deck=POEMS.filter(p=>c==='all'||p.color===c);if($('order').value==='random')shuffle(deck);index=0;score=0;answered=0;updateStats();$('feedback').textContent='';$('feedback').className='feedback';showScreen('game-screen');showQuestion()}
-function updateStats(){$('progress').textContent=`${Math.min(index+(deck.length?1:0),deck.length)} / ${deck.length}`;$('correct').textContent=score;$('rate').textContent=answered?`${Math.round(score/answered*100)}%`:'—'}
-function showQuestion(){if(index>=deck.length){$('kami').textContent='全問終了！';$('author').textContent=`${deck.length}首を出題しました。おつかれさま！`;$('answer-area').innerHTML='';$('badge').textContent='終了';$('feedback').textContent=`結果：${score} / ${answered} 正解`;$('feedback').className='feedback info';$('check').disabled=true;$('reveal').disabled=true;$('next').textContent='もう一度';$('next').disabled=false;return}locked=false;selected=null;const p=deck[index];currentMode=$('mode').value==='mixed'?['choice','typing','cards'][Math.floor(Math.random()*3)]:$('mode').value;$('badge').textContent=`第${p.n}首 · ${p.color}札`;$('badge').style.background=COLORS[p.color];$('badge').style.color=(p.color==='黄'||p.color==='桃')?'#222222':'#ffffff';$('mode-badge').textContent=({choice:'4択問題',typing:'文字入力',cards:'札選択'})[currentMode];$('kami').textContent=p.kami;$('author').textContent='';$('feedback').textContent='';$('feedback').className='feedback';$('answer-area').innerHTML='';$('check').disabled=currentMode==='choice'||currentMode==='cards';$('reveal').disabled=false;$('next').disabled=true;$('next').textContent='次の問題 →';$('next').onclick=next;
-if(currentMode==='typing'){const row=document.createElement('div');row.className='typing-row';const input=document.createElement('input');input.id='typed';input.placeholder='下の句を入力…';input.autocomplete='off';input.addEventListener('keydown',e=>{if(e.key==='Enter')checkTyped()});const btn=document.createElement('button');btn.className='primary';btn.textContent='答え合わせ';btn.onclick=checkTyped;row.append(input,btn);$('answer-area').append(row);$('check').disabled=true;setTimeout(()=>input.focus(),0)}else{let options=[p];const pool=shuffle(POEMS.filter(x=>x.n!==p.n));options.push(...pool.slice(0,3));shuffle(options);options.forEach((o,i)=>{const b=document.createElement('button');b.className='answer-option';b.textContent=o.shimo;b.onclick=()=>choose(b,o);$('answer-area').append(b)});$('check').disabled=true}}
-function choose(btn,p){if(locked)return;selected=p;document.querySelectorAll('.answer-option').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');if(currentMode==='cards'){judge(p.n===deck[index].n,btn)}else{$('check').disabled=false}}
-function checkTyped(){if(locked)return;const val=$('typed')?.value||'';if(!val.trim()){$('feedback').textContent='下の句を入力してください。';$('feedback').className='feedback info';return}const ok=normalize(val)===normalize(deck[index].shimo);judge(ok,null)}
-function check(){if(!selected)return;judge(selected.n===deck[index].n,document.querySelector('.answer-option.selected'))}
-function judge(ok,btn){if(locked)return;locked=true;answered++;if(ok)score++;const p=deck[index];if(btn)btn.classList.add(ok?'correct':'wrong');document.querySelectorAll('.answer-option').forEach(b=>{if(normalize(b.textContent)===normalize(p.shimo))b.classList.add('correct');b.disabled=true});$('feedback').textContent=ok?'正解！ よく覚えています。':`不正解。正解は「${p.shimo}」です。`;$('feedback').className='feedback '+(ok?'good':'bad');$('author').textContent=`作者：${p.author}`;$('check').disabled=true;$('reveal').disabled=true;$('next').disabled=false;updateStats()}
-function reveal(){if(locked)return;locked=true;const p=deck[index];$('feedback').textContent=`正解：${p.shimo}`;$('feedback').className='feedback info';$('author').textContent=`作者：${p.author}`;document.querySelectorAll('.answer-option').forEach(b=>{if(normalize(b.textContent)===normalize(p.shimo))b.classList.add('correct');b.disabled=true});$('check').disabled=true;$('reveal').disabled=true;$('next').disabled=false}
-function next(){if(index>=deck.length){start();return}index++;updateStats();showQuestion()}
-$('start').addEventListener('click',start);$('check').addEventListener('click',()=>currentMode==='typing'?checkTyped():check());$('reveal').addEventListener('click',reveal);$('next').addEventListener('click',next);
 
-function showScreen(id){document.querySelectorAll('.screen').forEach(screen=>screen.classList.toggle('hidden',screen.id!==id));window.scrollTo({top:0,behavior:'smooth'});}
-$('go-select').addEventListener('click',()=>showScreen('select-screen'));
-document.querySelectorAll('[data-screen]').forEach(button=>button.addEventListener('click',()=>showScreen(button.dataset.screen)));
+for (const [color, numbers] of Object.entries(COLOR_NUMBERS)) {
+  for (const poem of POEMS) {
+    if (numbers.includes(poem.n)) poem.color = color;
+  }
+}
+
+const COLORS = {
+  "青": "#1685D1",
+  "桃": "#E979A5",
+  "黄": "#F2CF38",
+  "緑": "#65A765",
+  "橙": "#ED8733"
+};
+
+const $ = id => document.getElementById(id);
+
+let deck = [];
+let index = 0;
+let score = 0;
+let answered = 0;
+let selected = null;
+let currentMode = "choice";
+let locked = false;
+
+const normalize = s =>
+  s.normalize("NFKC")
+    .replace(/[\s　、。・「」『』]/g, "")
+    .replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+    .replace(/[ゐゑ]/g, "い");
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function start() {
+  const c = $("color").value;
+  deck = POEMS.filter(p => c === "all" || p.color === c);
+
+  if ($("order").value === "random") shuffle(deck);
+
+  index = 0;
+  score = 0;
+  answered = 0;
+
+  updateStats();
+  $("feedback").textContent = "";
+  $("feedback").className = "feedback";
+
+  showScreen("game-screen");
+  showQuestion();
+}
+
+function updateStats() {
+  $("progress").textContent =
+    `${Math.min(index + (deck.length ? 1 : 0), deck.length)} / ${deck.length}`;
+
+  $("correct").textContent = score;
+  $("rate").textContent = answered
+    ? `${Math.round(score / answered * 100)}%`
+    : "—";
+}
+
+function showQuestion() {
+  if (index >= deck.length) {
+    $("kami").textContent = "全問終了！";
+    $("author").textContent = `${deck.length}首を出題しました。おつかれさま！`;
+    $("answer-area").innerHTML = "";
+    $("badge").textContent = "終了";
+    $("feedback").textContent = `結果：${score} / ${answered} 正解`;
+    $("feedback").className = "feedback info";
+    $("check").disabled = true;
+    $("reveal").disabled = true;
+    $("next").textContent = "もう一度";
+    $("next").disabled = false;
+    return;
+  }
+
+  locked = false;
+  selected = null;
+
+  const p = deck[index];
+
+  currentMode = $("mode").value === "mixed"
+    ? ["choice", "typing", "cards"][Math.floor(Math.random() * 3)]
+    : $("mode").value;
+
+  $("badge").textContent = `第${p.n}首 · ${p.color}札`;
+  $("badge").style.background = COLORS[p.color];
+  $("badge").style.color =
+    (p.color === "黄" || p.color === "桃") ? "#222222" : "#ffffff";
+
+  $("mode-badge").textContent = ({
+    choice: "4択問題",
+    typing: "文字入力",
+    cards: "札選択"
+  })[currentMode];
+
+  $("kami").textContent = p.kami;
+  $("author").textContent = "";
+  $("feedback").textContent = "";
+  $("feedback").className = "feedback";
+  $("answer-area").innerHTML = "";
+
+  $("check").disabled = currentMode === "choice" || currentMode === "cards";
+  $("reveal").disabled = false;
+  $("next").disabled = true;
+  $("next").textContent = "次の問題 →";
+  $("next").onclick = next;
+
+  if (currentMode === "typing") {
+    const row = document.createElement("div");
+    row.className = "typing-row";
+
+    const input = document.createElement("input");
+    input.id = "typed";
+    input.placeholder = "下の句を入力…";
+    input.autocomplete = "off";
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") checkTyped();
+    });
+
+    const btn = document.createElement("button");
+    btn.className = "primary";
+    btn.textContent = "答え合わせ";
+    btn.onclick = checkTyped;
+
+    row.append(input, btn);
+    $("answer-area").append(row);
+
+    $("check").disabled = true;
+    setTimeout(() => input.focus(), 0);
+  } else {
+    let options = [p];
+    const pool = shuffle(POEMS.filter(x => x.n !== p.n));
+    options.push(...pool.slice(0, 3));
+    shuffle(options);
+
+    options.forEach(o => {
+      const b = document.createElement("button");
+      b.className = "answer-option";
+      b.textContent = o.shimo;
+      b.onclick = () => choose(b, o);
+      $("answer-area").append(b);
+    });
+
+    $("check").disabled = true;
+  }
+}
+
+// 4択問題・札選択は、選択肢を押した瞬間に正誤判定する
+function choose(btn, p) {
+  if (locked || !deck[index]) return;
+
+  selected = p;
+
+  document.querySelectorAll(".answer-option").forEach(b => {
+    b.classList.remove("selected");
+  });
+
+  btn.classList.add("selected");
+
+  if (currentMode === "choice" || currentMode === "cards") {
+    judge(p.n === deck[index].n, btn);
+  } else {
+    $("check").disabled = false;
+  }
+}
+
+function checkTyped() {
+  if (locked) return;
+
+  const val = $("typed")?.value || "";
+
+  if (!val.trim()) {
+    $("feedback").textContent = "下の句を入力してください。";
+    $("feedback").className = "feedback info";
+    return;
+  }
+
+  const ok = normalize(val) === normalize(deck[index].shimo);
+  judge(ok, null);
+}
+
+function check() {
+  if (!selected) return;
+
+  judge(
+    selected.n === deck[index].n,
+    document.querySelector(".answer-option.selected")
+  );
+}
+
+function judge(ok, btn) {
+  if (locked) return;
+
+  locked = true;
+  answered++;
+
+  if (ok) score++;
+
+  const p = deck[index];
+
+  if (btn) btn.classList.add(ok ? "correct" : "wrong");
+
+  document.querySelectorAll(".answer-option").forEach(b => {
+    if (normalize(b.textContent) === normalize(p.shimo)) {
+      b.classList.add("correct");
+    }
+
+    b.disabled = true;
+  });
+
+  $("feedback").textContent = ok
+    ? "正解！ よく覚えています。"
+    : `不正解。正解は「${p.shimo}」です。`;
+
+  $("feedback").className = "feedback " + (ok ? "good" : "bad");
+  $("author").textContent = `作者：${p.author}`;
+  $("check").disabled = true;
+  $("reveal").disabled = true;
+  $("next").disabled = false;
+
+  updateStats();
+}
+
+function reveal() {
+  if (locked) return;
+
+  locked = true;
+
+  const p = deck[index];
+
+  $("feedback").textContent = `正解：${p.shimo}`;
+  $("feedback").className = "feedback info";
+  $("author").textContent = `作者：${p.author}`;
+
+  document.querySelectorAll(".answer-option").forEach(b => {
+    if (normalize(b.textContent) === normalize(p.shimo)) {
+      b.classList.add("correct");
+    }
+
+    b.disabled = true;
+  });
+
+  $("check").disabled = true;
+  $("reveal").disabled = true;
+  $("next").disabled = false;
+}
+
+function next() {
+  if (index >= deck.length) {
+    start();
+    return;
+  }
+
+  index++;
+  updateStats();
+  showQuestion();
+}
+
+$("start").addEventListener("click", start);
+$("check").addEventListener("click", () =>
+  currentMode === "typing" ? checkTyped() : check()
+);
+$("reveal").addEventListener("click", reveal);
+$("next").addEventListener("click", next);
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(screen => {
+    screen.classList.toggle("hidden", screen.id !== id);
+  });
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+$("go-select").addEventListener("click", () => showScreen("select-screen"));
+
+document.querySelectorAll("[data-screen]").forEach(button => {
+  button.addEventListener("click", () => showScreen(button.dataset.screen));
+});
 
 // 実際の端末の日付から季節を決定（日本の暦：春3〜5月、夏6〜8月、秋9〜11月、冬12〜2月）
-function applySeason(){
-  const month=new Date().getMonth()+1;
-  const season=month>=3&&month<=5?'spring':month>=6&&month<=8?'summer':month>=9&&month<=11?'autumn':'winter';
-  const themes={
-    spring:{label:'春 · SAKURA',message:'花びら舞う季節に、一首ずつ。',foot:'春のしつらえ',symbol:'🌸',art:['🌸','🌸','🌸']},
-    summer:{label:'夏 · MATSURI',message:'祭りの灯りと、夏のことば。',foot:'夏祭りのしつらえ',symbol:'🏮',art:['🎐','🏮','🎆']},
-    autumn:{label:'秋 · MOMIJI',message:'色づく景色と、深まることば。',foot:'紅葉のしつらえ',symbol:'🍁',art:['🍂','🍁','🍂']},
-    winter:{label:'冬 · OSHŌGATSU',message:'新しい年を、和歌とともに。',foot:'お正月のしつらえ',symbol:'🎍',art:['🎍','🌅','🎍']}
+function applySeason() {
+  const month = new Date().getMonth() + 1;
+
+  const season =
+    month >= 3 && month <= 5 ? "spring" :
+    month >= 6 && month <= 8 ? "summer" :
+    month >= 9 && month <= 11 ? "autumn" :
+    "winter";
+
+  const themes = {
+    spring: {
+      label: "春 · SAKURA",
+      message: "花びら舞う季節に、一首ずつ。",
+      foot: "春のしつらえ",
+      symbol: "🌸",
+      art: ["🌸", "🌸", "🌸"]
+    },
+    summer: {
+      label: "夏 · MATSURI",
+      message: "祭りの灯りと、夏のことば。",
+      foot: "夏祭りのしつらえ",
+      symbol: "🏮",
+      art: ["🎐", "🏮", "🎆"]
+    },
+    autumn: {
+      label: "秋 · MOMIJI",
+      message: "色づく景色と、深まることば。",
+      foot: "紅葉のしつらえ",
+      symbol: "🍁",
+      art: ["🍂", "🍁", "🍂"]
+    },
+    winter: {
+      label: "冬 · OSHŌGATSU",
+      message: "新しい年を、和歌とともに。",
+      foot: "お正月のしつらえ",
+      symbol: "🎍",
+      art: ["🎍", "🌅", "🎍"]
+    }
   };
-  const t=themes[season];document.body.dataset.season=season;
-  $('season-label').textContent=t.label;$('season-message').textContent=t.message;$('season-foot').textContent=t.foot;$('season-symbol').textContent=t.symbol;
-  $('season-art').innerHTML=t.art.map(x=>`<span>${x}</span>`).join('');
+
+  const t = themes[season];
+
+  document.body.dataset.season = season;
+  $("season-label").textContent = t.label;
+  $("season-message").textContent = t.message;
+  $("season-foot").textContent = t.foot;
+  $("season-symbol").textContent = t.symbol;
+  $("season-art").innerHTML = t.art.map(x => `<span>${x}</span>`).join("");
 }
+
 applySeason();
