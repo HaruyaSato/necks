@@ -183,7 +183,11 @@ async function recordRankingChallenge() {
   if (!rankingPlayerRegistered) return;
   try {
     const result = await callRankingFunction('record');
-    if (result.result === false) console.info('挑戦回数は30秒以内のため記録されませんでした。');
+    if (result.result === false) {
+      console.info('挑戦回数は30秒以内のため記録されませんでした。');
+    } else {
+      await loadRanking();
+    }
   } catch (e) {
     console.error('Challenge record failed:', e);
     setAccountStatus('挑戦記録を保存できませんでした：' + (e.message || '設定を確認してください'));
@@ -1294,5 +1298,13 @@ document.getElementById('login-player').addEventListener('click', loginRankingPl
 document.getElementById('logout-player').addEventListener('click', logoutRankingPlayer);
 document.getElementById('refresh-ranking').addEventListener('click', loadRanking);
 void initRanking();
+
+// ランキング画面が見えている間だけ、15秒ごとに最新順位を取得する。
+setInterval(() => {
+  const rankingCard = document.querySelector('.ranking-card');
+  if (!document.hidden && rankingCard && rankingCard.getClientRects().length > 0) {
+    void loadRanking();
+  }
+}, 15000);
 
 applySeason();
