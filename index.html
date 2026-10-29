@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7e9ec"><title>百人一首 暗記の庭</title><link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="season-wash" aria-hidden="true"><span class="season-symbol" id="season-symbol">❀</span></div>
@@ -18,6 +19,18 @@
     <p class="home-description">上の句を読んで、下の句を思い出そう。</p>
     <button id="go-select" class="primary large-button">ゲームを始める<span aria-hidden="true">→</span></button>
   </div>
+  <section class="home-card ranking-card" aria-labelledby="ranking-title">
+    <p id="ranking-title">週間ランキング</p>
+    <p class="home-description">ニックネームを登録すると、挑戦回数がランキングに反映されます。</p>
+    <label class="ranking-label" for="account-name">ニックネーム（1〜30文字）</label>
+    <input id="account-name" maxlength="30" placeholder="ニックネームを入力" autocomplete="nickname">
+    <div class="ranking-actions">
+      <button id="register-player" class="primary">登録する</button>
+      <button id="refresh-ranking" class="secondary">ランキング更新</button>
+    </div>
+    <p id="account-status" class="ranking-status" aria-live="polite">ランキング機能に接続しています…</p>
+    <ol id="ranking-list" class="ranking-list"><li>読み込み中…</li></ol>
+  </section>
   <p class="season-foot" id="season-foot">春のしつらえ</p>
 </section>
 
