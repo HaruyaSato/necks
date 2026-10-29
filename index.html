@@ -24,10 +24,17 @@
     <p class="home-description">ニックネームを登録すると、挑戦回数がランキングに反映されます。</p>
     <label class="ranking-label" for="account-name">ニックネーム（1〜30文字）</label>
     <input id="account-name" maxlength="30" placeholder="ニックネームを入力" autocomplete="nickname">
+    <label class="ranking-label" for="account-email">メールアドレス</label>
+    <input id="account-email" type="email" placeholder="you@example.com" autocomplete="email">
+    <label class="ranking-label" for="account-password">パスワード（8文字以上推奨）</label>
+    <input id="account-password" type="password" minlength="8" placeholder="パスワードを入力" autocomplete="new-password">
     <div class="ranking-actions">
-      <button id="register-player" class="primary">登録する</button>
+      <button id="register-player" class="primary">新規登録・保存</button>
+      <button id="login-player" class="secondary">ログイン</button>
+      <button id="logout-player" class="secondary">ログアウト</button>
       <button id="refresh-ranking" class="secondary">ランキング更新</button>
     </div>
+    <p class="home-description account-help">初回は新規登録。次回以降は同じメールアドレスとパスワードでログインできます。メール確認が有効な場合は、届いた確認メールも開いてください。</p>
     <p id="account-status" class="ranking-status" aria-live="polite">ランキング機能に接続しています…</p>
     <ol id="ranking-list" class="ranking-list"><li>読み込み中…</li></ol>
   </section>

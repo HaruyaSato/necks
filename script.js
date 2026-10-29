@@ -1,4 +1,4 @@
-// Supabase ranking integration. The publishable key is intended for browser use.
+// Supabase ranking + password account integration. Publishable key is safe for browser use.
 const SUPABASE_URL = 'https://izsreepytmybwqpwmpgm.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_A3rBakQNiPH1C3WANkAEMQ_4swbfJs3';
 const RANKING_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/Ranking`;
@@ -6,28 +6,21 @@ let rankingClient = null;
 let rankingPlayerRegistered = false;
 let rankingRequestInProgress = false;
 
-async function initRanking() {
-  const status = document.getElementById('account-status');
-  try {
-    if (!window.supabase || !window.supabase.createClient) throw new Error('Supabase ライブラリを読み込めません。インターネット接続を確認してください。');
-    rankingClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-    let { data: { session }, error } = await rankingClient.auth.getSession();
-    if (error) throw error;
-    if (!session) {
-      const signed = await rankingClient.auth.signInAnonymously();
-      if (signed.error) throw signed.error;
-      session = signed.data.session;
-    }
-    if (!session) throw new Error('匿名ログインのセッションを取得できませんでした。');
-    status.textContent = '接続しました。ニックネームを登録してください。';
-    await loadRanking();
-  } catch (e) {
-    console.error('Ranking initialization failed:', e);
-    status.textContent = '接続エラー：' + (e.message || '設定を確認してください');
-  }
+function setAccountStatus(message) {
+  const el = document.getElementById('account-status');
+  if (el) el.textContent = message;
 }
 
-async function callRankingFunction(action, extra = {}) {
+function setAccountButtons({ registered = false, busy = false } = {}) {
+  const register = document.getElementById('register-player');
+  const login = document.getElementById('login-player');
+  const logout = document.getElementById('logout-player');
+  if (register) register.disabled = busy || registered;
+  if (login) login.disabled = busy;
+  if (logout) logout.disabled = busy;
+}
+
+async function ensureSession() {
   if (!rankingClient) throw new Error('Supabase に接続できていません。');
   let { data: { session }, error } = await rankingClient.auth.getSession();
   if (error) throw error;
@@ -36,6 +29,45 @@ async function callRankingFunction(action, extra = {}) {
     if (signed.error) throw signed.error;
     session = signed.data.session;
   }
+  if (!session) throw new Error('ログイン状態を取得できませんでした。');
+  return session;
+}
+
+async function initRanking() {
+  try {
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error('Supabase ライブラリを読み込めません。インターネット接続を確認してください。');
+    }
+    rankingClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const { data: { session }, error } = await rankingClient.auth.getSession();
+    if (error) throw error;
+    if (!session) {
+      const signed = await rankingClient.auth.signInAnonymously();
+      if (signed.error) throw signed.error;
+      session = signed.data.session;
+    }
+    const current = await rankingClient.auth.getUser();
+    if (current.data?.user && !current.data.user.is_anonymous && current.data.user.email) {
+      const savedName = current.data.user.user_metadata?.account_name || 'プレイヤー';
+      document.getElementById('account-name').value = savedName;
+      document.getElementById('account-name').disabled = true;
+      document.getElementById('account-email').value = current.data.user.email;
+      await callRankingFunction('register', { account_name: savedName });
+      rankingPlayerRegistered = true;
+      setAccountButtons({ registered: true });
+      setAccountStatus('ログイン状態を復元しました。ランキングと挑戦記録を利用できます。');
+    } else {
+      setAccountStatus('接続しました。新規登録するか、登録済みアカウントでログインしてください。');
+    }
+    await loadRanking();
+  } catch (e) {
+    console.error('Ranking initialization failed:', e);
+    setAccountStatus('接続エラー：' + (e.message || '設定を確認してください'));
+  }
+}
+
+async function callRankingFunction(action, extra = {}) {
+  const session = await ensureSession();
   const response = await fetch(RANKING_FUNCTION_URL, {
     method: 'POST',
     headers: {
@@ -46,32 +78,104 @@ async function callRankingFunction(action, extra = {}) {
     body: JSON.stringify({ action, ...extra })
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.error) throw new Error(result.error || `HTTP ${response.status}`);
+  if (!response.ok || result.error) throw new Error(result.details || result.error || `HTTP ${response.status}`);
   return result;
 }
 
-async function registerRankingPlayer() {
-  const status = document.getElementById('account-status');
+function getAccountInputs() {
   const name = document.getElementById('account-name').value.trim();
-  if (!name || name.length > 30) {
-    status.textContent = 'ニックネームを1〜30文字で入力してください。';
-    return;
-  }
+  const email = document.getElementById('account-email').value.trim();
+  const password = document.getElementById('account-password').value;
+  if (!name || name.length > 30) throw new Error('ニックネームを1〜30文字で入力してください。');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('有効なメールアドレスを入力してください。');
+  if (password.length < 8) throw new Error('パスワードは8文字以上で入力してください。');
+  return { name, email, password };
+}
+
+async function registerRankingPlayer() {
   if (rankingRequestInProgress) return;
   rankingRequestInProgress = true;
-  status.textContent = '登録しています…';
+  setAccountButtons({ busy: true });
+  setAccountStatus('アカウントを登録しています…');
   try {
+    const { name, email, password } = getAccountInputs();
+    const session = await ensureSession();
+    const userResult = await rankingClient.auth.getUser();
+    if (userResult.error) throw userResult.error;
+    const user = userResult.data.user;
+
+    // Upgrade the current anonymous identity in place when possible, preserving its UUID and ranking link.
+    if (user && user.is_anonymous) {
+      const updated = await rankingClient.auth.updateUser({ email, password, data: { account_name: name } });
+      if (updated.error) throw updated.error;
+    } else if (user && user.email && user.email.toLowerCase() !== email.toLowerCase()) {
+      throw new Error('別のアカウントでログイン中です。ログアウトしてから登録してください。');
+    } else if (user && user.email) {
+      const updated = await rankingClient.auth.updateUser({ password, data: { account_name: name } });
+      if (updated.error) throw updated.error;
+    }
+
     await callRankingFunction('register', { account_name: name });
     rankingPlayerRegistered = true;
     document.getElementById('account-name').disabled = true;
-    document.getElementById('register-player').disabled = true;
-    status.textContent = `「${name}」として登録しました。ゲームに挑戦できます。`;
+    document.getElementById('account-email').value = email;
+    document.getElementById('account-password').value = '';
+    setAccountButtons({ registered: true });
+    setAccountStatus('「' + name + '」の登録を受け付けました。同じメールアドレスとパスワードでログインできます。メール確認が必要な場合は、確認後にログインしてください。');
     await loadRanking();
   } catch (e) {
     console.error('Player registration failed:', e);
-    status.textContent = '登録できませんでした：' + (e.message || '設定を確認してください');
+    setAccountStatus('登録できませんでした：' + (e.message || '設定を確認してください'));
+    setAccountButtons();
   } finally {
     rankingRequestInProgress = false;
+  }
+}
+
+async function loginRankingPlayer() {
+  if (rankingRequestInProgress) return;
+  rankingRequestInProgress = true;
+  setAccountButtons({ busy: true });
+  setAccountStatus('ログインしています…');
+  try {
+    const email = document.getElementById('account-email').value.trim();
+    const password = document.getElementById('account-password').value;
+    if (!email || !password) throw new Error('メールアドレスとパスワードを入力してください。');
+    const signedOut = await rankingClient.auth.signOut();
+    if (signedOut.error) throw signedOut.error;
+    const signed = await rankingClient.auth.signInWithPassword({ email, password });
+    if (signed.error) throw signed.error;
+    const name = document.getElementById('account-name').value.trim() || (signed.data.user.user_metadata?.account_name || 'プレイヤー');
+    document.getElementById('account-name').value = name;
+    await callRankingFunction('register', { account_name: name });
+    rankingPlayerRegistered = true;
+    document.getElementById('account-name').disabled = true;
+    document.getElementById('account-password').value = '';
+    setAccountButtons({ registered: true });
+    setAccountStatus('ログインしました。ランキングと挑戦記録を利用できます。');
+    await loadRanking();
+  } catch (e) {
+    console.error('Login failed:', e);
+    rankingPlayerRegistered = false;
+    setAccountStatus('ログインできませんでした：' + (e.message || '入力内容を確認してください'));
+    setAccountButtons();
+  } finally {
+    rankingRequestInProgress = false;
+  }
+}
+
+async function logoutRankingPlayer() {
+  try {
+    const { error } = await rankingClient.auth.signOut();
+    if (error) throw error;
+    rankingPlayerRegistered = false;
+    document.getElementById('account-name').disabled = false;
+    document.getElementById('account-password').value = '';
+    setAccountButtons();
+    setAccountStatus('ログアウトしました。次回はメールアドレスとパスワードでログインしてください。');
+    await ensureSession();
+  } catch (e) {
+    setAccountStatus('ログアウトできませんでした：' + (e.message || 'もう一度お試しください'));
   }
 }
 
@@ -79,19 +183,15 @@ async function recordRankingChallenge() {
   if (!rankingPlayerRegistered) return;
   try {
     const result = await callRankingFunction('record');
-    if (result.result === false) {
-      console.info('挑戦回数は30秒以内のため記録されませんでした。');
-    }
+    if (result.result === false) console.info('挑戦回数は30秒以内のため記録されませんでした。');
   } catch (e) {
     console.error('Challenge record failed:', e);
-    const status = document.getElementById('account-status');
-    status.textContent = '挑戦記録を保存できませんでした：' + (e.message || '設定を確認してください');
+    setAccountStatus('挑戦記録を保存できませんでした：' + (e.message || '設定を確認してください'));
   }
 }
 
 async function loadRanking() {
   const list = document.getElementById('ranking-list');
-  const status = document.getElementById('account-status');
   try {
     const result = await callRankingFunction('ranking');
     const rows = Array.isArray(result.ranking) ? result.ranking : [];
@@ -101,7 +201,6 @@ async function loadRanking() {
       li.className = 'empty-ranking';
       li.textContent = 'まだランキングデータがありません。';
       list.appendChild(li);
-      if (!rankingPlayerRegistered) status.textContent = '接続しました。ニックネームを登録してください。';
       return;
     }
     rows.forEach((row, i) => {
@@ -113,7 +212,6 @@ async function loadRanking() {
       li.appendChild(count);
       list.appendChild(li);
     });
-    if (!rankingPlayerRegistered) status.textContent = '週間ランキングを表示しています。登録すると挑戦回数を記録できます。';
   } catch (e) {
     console.error('Ranking load failed:', e);
     list.innerHTML = '';
@@ -121,7 +219,7 @@ async function loadRanking() {
     li.className = 'empty-ranking';
     li.textContent = 'ランキングを読み込めませんでした。';
     list.appendChild(li);
-    status.textContent = 'ランキング取得エラー：' + (e.message || '設定を確認してください');
+    setAccountStatus('ランキング取得エラー：' + (e.message || '設定を確認してください'));
   }
 }
 
@@ -1192,6 +1290,8 @@ function applySeason() {
 }
 
 document.getElementById('register-player').addEventListener('click', registerRankingPlayer);
+document.getElementById('login-player').addEventListener('click', loginRankingPlayer);
+document.getElementById('logout-player').addEventListener('click', logoutRankingPlayer);
 document.getElementById('refresh-ranking').addEventListener('click', loadRanking);
 void initRanking();
 
