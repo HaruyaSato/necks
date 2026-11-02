@@ -44,7 +44,15 @@ async function callRankingFunction(action, extra = {}) {
 async function initRanking() {
   try {
     if (!window.firebase) throw new Error('Firebase SDKを読み込めません。');
-    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+    // 既存の別Firebaseプロジェクトのアプリを誤って再利用しない。
+    // projectId が一致するアプリだけを使い、なければ専用名で初期化する。
+    let app = firebase.apps.find(item => item.options.projectId === FIREBASE_CONFIG.projectId);
+    if (!app) {
+      app = firebase.initializeApp(FIREBASE_CONFIG, 'hyakuninissyu-auth');
+    }
+    if (app.options.projectId !== FIREBASE_CONFIG.projectId) {
+      throw new Error('FirebaseのProject IDが設定と一致しません。');
+    }
     firebaseAuth = app.auth();
     firebaseAuth.onAuthStateChanged(async user => {
       rankingPlayerRegistered = false;
