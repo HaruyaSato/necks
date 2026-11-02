@@ -1,8 +1,15 @@
-// Supabase ranking + password account integration. Publishable key is safe for browser use.
-const SUPABASE_URL = 'https://izsreepytmybwqpwmpgm.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_A3rBakQNiPH1C3WANkAEMQ_4swbfJs3';
-const RANKING_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/Ranking`;
-let rankingClient = null;
+// Firebase Authentication + Supabase ranking
+// Firebase Web config is public client configuration. Never put Supabase service-role keys here.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBzI9e-n_zcBRF1Pjc5bGgK5I2JLbEXub8",
+  authDomain: "hyakuninissyu-1d615.firebaseapp.com",
+  projectId: "hyakuninissyu-1d615",
+  storageBucket: "hyakuninissyu-1d615.firebasestorage.app",
+  messagingSenderId: "5144051664",
+  appId: "1:5144051664:web:ac448464fab441dd3803d5"
+};
+const RANKING_FUNCTION_URL = 'https://izsreepytmybwqpwmpgm.supabase.co/functions/v1/Ranking';
+let firebaseAuth = null;
 let rankingPlayerRegistered = false;
 let rankingRequestInProgress = false;
 
@@ -10,78 +17,65 @@ function setAccountStatus(message) {
   const el = document.getElementById('account-status');
   if (el) el.textContent = message;
 }
-
 function setAccountButtons({ registered = false, busy = false } = {}) {
   const register = document.getElementById('register-player');
   const login = document.getElementById('login-player');
   const logout = document.getElementById('logout-player');
   if (register) register.disabled = busy || registered;
-  if (login) login.disabled = busy;
-  if (logout) logout.disabled = busy;
+  if (login) login.disabled = busy || registered;
+  if (logout) logout.disabled = busy || !registered;
 }
-
-async function ensureSession() {
-  if (!rankingClient) throw new Error('Supabase に接続できていません。');
-  let { data: { session }, error } = await rankingClient.auth.getSession();
-  if (error) throw error;
-  if (!session) {
-    const signed = await rankingClient.auth.signInAnonymously();
-    if (signed.error) throw signed.error;
-    session = signed.data.session;
-  }
-  if (!session) throw new Error('ログイン状態を取得できませんでした。');
-  return session;
+async function getFirebaseToken() {
+  const user = firebaseAuth?.currentUser;
+  if (!user) throw new Error('ログインしてください。');
+  return await user.getIdToken();
 }
-
-async function initRanking() {
-  try {
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error('Supabase ライブラリを読み込めません。インターネット接続を確認してください。');
-    }
-    rankingClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-    const { data: { session }, error } = await rankingClient.auth.getSession();
-    if (error) throw error;
-    if (!session) {
-      const signed = await rankingClient.auth.signInAnonymously();
-      if (signed.error) throw signed.error;
-      session = signed.data.session;
-    }
-    const current = await rankingClient.auth.getUser();
-    if (current.data?.user && !current.data.user.is_anonymous && current.data.user.email) {
-      const savedName = current.data.user.user_metadata?.account_name || 'プレイヤー';
-      document.getElementById('account-name').value = savedName;
-      document.getElementById('account-name').disabled = true;
-      document.getElementById('account-email').value = current.data.user.email;
-      await callRankingFunction('register', { account_name: savedName });
-      rankingPlayerRegistered = true;
-      setAccountButtons({ registered: true });
-      setAccountStatus('ログイン状態を復元しました。ランキングと挑戦記録を利用できます。');
-    } else {
-      setAccountStatus('接続しました。新規登録するか、登録済みアカウントでログインしてください。');
-    }
-    await loadRanking();
-  } catch (e) {
-    console.error('Ranking initialization failed:', e);
-    setAccountStatus('接続エラー：' + (e.message || '設定を確認してください'));
-  }
-}
-
 async function callRankingFunction(action, extra = {}) {
-  const session = await ensureSession();
+  const token = action === 'ranking' ? null : await getFirebaseToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(RANKING_FUNCTION_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_PUBLISHABLE_KEY,
-      'Authorization': `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ action, ...extra })
+    method: 'POST', headers, body: JSON.stringify({ action, ...extra })
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.error) throw new Error(result.details || result.error || `HTTP ${response.status}`);
   return result;
 }
-
+async function initRanking() {
+  try {
+    if (!window.firebase) throw new Error('Firebase SDKを読み込めません。');
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseAuth = app.auth();
+    firebaseAuth.onAuthStateChanged(async user => {
+      rankingPlayerRegistered = false;
+      const nameInput = document.getElementById('account-name');
+      const emailInput = document.getElementById('account-email');
+      if (user) {
+        if (emailInput) emailInput.value = user.email || '';
+        try {
+          const result = await callRankingFunction('register', { account_name: user.displayName || nameInput.value.trim() || 'プレイヤー' });
+          const savedName = result.account_name || user.displayName || nameInput.value.trim() || 'プレイヤー';
+          if (nameInput) { nameInput.value = savedName; nameInput.disabled = true; }
+          rankingPlayerRegistered = true;
+          setAccountButtons({ registered: true });
+          setAccountStatus('ログイン中です。ランキングと挑戦記録を利用できます。');
+        } catch (e) {
+          console.error(e);
+          setAccountStatus('プレイヤー登録エラー：' + e.message);
+          setAccountButtons();
+        }
+      } else {
+        if (nameInput) { nameInput.disabled = false; }
+        setAccountButtons();
+        setAccountStatus('Firebaseに接続しました。新規登録またはログインしてください。');
+      }
+      await loadRanking();
+    });
+  } catch (e) {
+    console.error('Firebase initialization failed:', e);
+    setAccountStatus('接続エラー：' + (e.message || '設定を確認してください'));
+  }
+}
 function getAccountInputs() {
   const name = document.getElementById('account-name').value.trim();
   const email = document.getElementById('account-email').value.trim();
@@ -91,140 +85,60 @@ function getAccountInputs() {
   if (password.length < 8) throw new Error('パスワードは8文字以上で入力してください。');
   return { name, email, password };
 }
-
 async function registerRankingPlayer() {
   if (rankingRequestInProgress) return;
-  rankingRequestInProgress = true;
-  setAccountButtons({ busy: true });
-  setAccountStatus('アカウントを登録しています…');
+  rankingRequestInProgress = true; setAccountButtons({ busy: true }); setAccountStatus('アカウントを登録しています…');
   try {
     const { name, email, password } = getAccountInputs();
-    const session = await ensureSession();
-    const userResult = await rankingClient.auth.getUser();
-    if (userResult.error) throw userResult.error;
-    const user = userResult.data.user;
-
-    // Upgrade the current anonymous identity in place when possible, preserving its UUID and ranking link.
-    if (user && user.is_anonymous) {
-      const updated = await rankingClient.auth.updateUser({ email, password, data: { account_name: name } });
-      if (updated.error) throw updated.error;
-    } else if (user && user.email && user.email.toLowerCase() !== email.toLowerCase()) {
-      throw new Error('別のアカウントでログイン中です。ログアウトしてから登録してください。');
-    } else if (user && user.email) {
-      const updated = await rankingClient.auth.updateUser({ password, data: { account_name: name } });
-      if (updated.error) throw updated.error;
-    }
-
+    const credential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+    await credential.user.updateProfile({ displayName: name });
+    await credential.user.getIdToken(true);
     await callRankingFunction('register', { account_name: name });
     rankingPlayerRegistered = true;
     document.getElementById('account-name').disabled = true;
-    document.getElementById('account-email').value = email;
     document.getElementById('account-password').value = '';
     setAccountButtons({ registered: true });
-    setAccountStatus('「' + name + '」の登録を受け付けました。同じメールアドレスとパスワードでログインできます。メール確認が必要な場合は、確認後にログインしてください。');
+    setAccountStatus('「' + name + '」で登録しました。');
     await loadRanking();
   } catch (e) {
-    console.error('Player registration failed:', e);
+    console.error('Registration failed:', e);
     setAccountStatus('登録できませんでした：' + (e.message || '設定を確認してください'));
-    setAccountButtons();
-  } finally {
-    rankingRequestInProgress = false;
-  }
+    setAccountButtons({ registered: !!firebaseAuth?.currentUser });
+  } finally { rankingRequestInProgress = false; }
 }
-
 async function loginRankingPlayer() {
   if (rankingRequestInProgress) return;
-  rankingRequestInProgress = true;
-  setAccountButtons({ busy: true });
-  setAccountStatus('ログインしています…');
+  rankingRequestInProgress = true; setAccountButtons({ busy: true }); setAccountStatus('ログインしています…');
   try {
     const email = document.getElementById('account-email').value.trim();
     const password = document.getElementById('account-password').value;
     if (!email || !password) throw new Error('メールアドレスとパスワードを入力してください。');
-    const signedOut = await rankingClient.auth.signOut();
-    if (signedOut.error) throw signedOut.error;
-    const signed = await rankingClient.auth.signInWithPassword({ email, password });
-    if (signed.error) throw signed.error;
-    const name = document.getElementById('account-name').value.trim() || (signed.data.user.user_metadata?.account_name || 'プレイヤー');
-    document.getElementById('account-name').value = name;
-    await callRankingFunction('register', { account_name: name });
-    rankingPlayerRegistered = true;
-    document.getElementById('account-name').disabled = true;
+    await firebaseAuth.signInWithEmailAndPassword(email, password);
     document.getElementById('account-password').value = '';
-    setAccountButtons({ registered: true });
-    setAccountStatus('ログインしました。ランキングと挑戦記録を利用できます。');
-    await loadRanking();
+    setAccountStatus('ログインしました。');
   } catch (e) {
-    console.error('Login failed:', e);
-    rankingPlayerRegistered = false;
-    setAccountStatus('ログインできませんでした：' + (e.message || '入力内容を確認してください'));
-    setAccountButtons();
-  } finally {
-    rankingRequestInProgress = false;
-  }
+    console.error('Login failed:', e); setAccountStatus('ログインできませんでした：' + (e.message || '入力内容を確認してください')); setAccountButtons();
+  } finally { rankingRequestInProgress = false; }
 }
-
 async function logoutRankingPlayer() {
-  try {
-    const { error } = await rankingClient.auth.signOut();
-    if (error) throw error;
-    rankingPlayerRegistered = false;
-    document.getElementById('account-name').disabled = false;
-    document.getElementById('account-password').value = '';
-    setAccountButtons();
-    setAccountStatus('ログアウトしました。次回はメールアドレスとパスワードでログインしてください。');
-    await ensureSession();
-  } catch (e) {
-    setAccountStatus('ログアウトできませんでした：' + (e.message || 'もう一度お試しください'));
-  }
+  try { await firebaseAuth.signOut(); rankingPlayerRegistered = false; document.getElementById('account-password').value = ''; setAccountStatus('ログアウトしました。'); }
+  catch (e) { setAccountStatus('ログアウトできませんでした：' + e.message); }
 }
-
 async function recordRankingChallenge() {
-  if (!rankingPlayerRegistered) return;
-  try {
-    const result = await callRankingFunction('record');
-    if (result.result === false) {
-      console.info('挑戦回数は30秒以内のため記録されませんでした。');
-    } else {
-      await loadRanking();
-    }
-  } catch (e) {
-    console.error('Challenge record failed:', e);
-    setAccountStatus('挑戦記録を保存できませんでした：' + (e.message || '設定を確認してください'));
-  }
+  if (!rankingPlayerRegistered || !firebaseAuth?.currentUser) return;
+  try { const result = await callRankingFunction('record'); if (result.result === false) console.info('30秒以内のため重複記録を防止しました。'); else await loadRanking(); }
+  catch (e) { console.error('Challenge record failed:', e); setAccountStatus('挑戦記録を保存できませんでした：' + e.message); }
 }
-
 async function loadRanking() {
   const list = document.getElementById('ranking-list');
+  if (!list) return;
   try {
     const result = await callRankingFunction('ranking');
     const rows = Array.isArray(result.ranking) ? result.ranking : [];
     list.innerHTML = '';
-    if (!rows.length) {
-      const li = document.createElement('li');
-      li.className = 'empty-ranking';
-      li.textContent = 'まだランキングデータがありません。';
-      list.appendChild(li);
-      return;
-    }
-    rows.forEach((row, i) => {
-      const li = document.createElement('li');
-      li.textContent = `${i + 1}位　${row.account_name || 'プレイヤー'}　`;
-      const count = document.createElement('span');
-      count.className = 'ranking-count';
-      count.textContent = `${row.challenge_count}回`;
-      li.appendChild(count);
-      list.appendChild(li);
-    });
-  } catch (e) {
-    console.error('Ranking load failed:', e);
-    list.innerHTML = '';
-    const li = document.createElement('li');
-    li.className = 'empty-ranking';
-    li.textContent = 'ランキングを読み込めませんでした。';
-    list.appendChild(li);
-    setAccountStatus('ランキング取得エラー：' + (e.message || '設定を確認してください'));
-  }
+    if (!rows.length) { const li = document.createElement('li'); li.className = 'empty-ranking'; li.textContent = 'まだランキングデータがありません。'; list.appendChild(li); return; }
+    rows.forEach((row, i) => { const li = document.createElement('li'); li.textContent = `${i + 1}位　${row.account_name || 'プレイヤー'}　`; const count = document.createElement('span'); count.className = 'ranking-count'; count.textContent = `${row.challenge_count}回`; li.appendChild(count); list.appendChild(li); });
+  } catch (e) { console.error('Ranking load failed:', e); list.innerHTML = ''; const li = document.createElement('li'); li.className = 'empty-ranking'; li.textContent = 'ランキングを読み込めませんでした。'; list.appendChild(li); }
 }
 
 const POEMS = [
